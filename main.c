@@ -10,10 +10,8 @@ Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
         XSetWindowAttributes *attributes);
 
-int (*real_XMapWindow)(Display *display, Window window);
 
-
-Window orig_windows[16];
+Window orig_window;
 int orig_window_index = 0;
 
 Window XCreateWindow(Display *display, Window parent, int x, int y,
@@ -22,30 +20,20 @@ Window XCreateWindow(Display *display, Window parent, int x, int y,
         XSetWindowAttributes *attributes)
 {
     if (orig_window_index < 16 && parent == XDefaultRootWindow(display)) {
-        XChangeWindowAttributes(display, orig_windows[orig_window_index++],
-                valuemask, attributes);
-        printf("win: 0x%lx\n", orig_windows[orig_window_index]);
-        return orig_windows[orig_window_index];
+        orig_window_index++;
+        if (orig_window_index == 8) {
+            XChangeWindowAttributes(display, orig_window,
+                    valuemask, attributes);
+            printf("win: 0x%lx\n", orig_window);
+            return orig_window;
+        }
     }
 
     Window win = real_XCreateWindow(display, parent, x, y, width, height,
             border_width, depth, class, visual, valuemask, attributes);
-    printf("win: %lu\n", win);
+    printf("win! %lu\n", win);
     return win;
 }
-
-int XMapWindow(Display *display, Window window)
-{
-    int i;
-    for (i = 0; i < 16; i++) {
-        if (orig_windows[i] == window) {
-            printf("mapped %d 0x%lx\n", i, window);
-        }
-    }
-    return real_XMapWindow(display, window);
-}
-
-
 
 void __attribute__ ((constructor)) __init(void)
 {
@@ -56,18 +44,14 @@ void __attribute__ ((constructor)) __init(void)
         exit(1);
     }
     real_XCreateWindow = dlsym(realX11, "XCreateWindow");
-    real_XMapWindow = dlsym(realX11, "XMapWindow");
 
     XInitThreads();
     Display *dpy = XOpenDisplay(NULL);
 
     XSetWindowAttributes orig_attributes;
-    int i;
-    for (i=0; i<16; i++) {
-        orig_windows[i] = real_XCreateWindow(dpy, DefaultRootWindow(dpy), 10,
-                10, 100, 100, 0, CopyFromParent, CopyFromParent, CopyFromParent,
-                0, &orig_attributes);
-        real_XMapWindow(dpy, orig_windows[i]);
-    }
+    orig_window = real_XCreateWindow(dpy, DefaultRootWindow(dpy), 10,
+            10, 100, 100, 0, CopyFromParent, CopyFromParent, CopyFromParent,
+            0, &orig_attributes);
+    XMapWindow(dpy, orig_window);
     XFlush(dpy);
 }
