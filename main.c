@@ -83,7 +83,16 @@ int XMapWindow(Display *display, Window window)
     return result;
 }
 
+void (*real_wine_init)(int argc, char *argv[], char *error, int error_size);
 
+void wine_init(int argc, char *argv[], char *error, int error_size)
+{
+    int i;
+    for (i = 0; i < argc; i++) {
+        printf("WIN %s\n", argv[i]);
+    }
+    real_wine_init(argc, argv, error, error_size);
+}
 
 void __attribute__ ((constructor)) __init(void)
 {
@@ -98,4 +107,11 @@ void __attribute__ ((constructor)) __init(void)
     real_XCreateWindow = dlsym(realX11, "XCreateWindow");
     real_XMapWindow = dlsym(realX11, "XMapWindow");
 
+    void *realwine = dlopen("libwine.so", RTLD_NOW | RTLD_GLOBAL);
+    if (!realX11) {
+        fputs(dlerror(), stderr);
+        fputs(dlerror(), stderr);
+        exit(1);
+    }
+    real_wine_init = dlsym(realwine, "wine_init");
 }
