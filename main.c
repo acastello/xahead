@@ -4,7 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <X11/Xlib.h>
+
+Display *(*real_XOpenDisplay)(const char *display_name);
 
 Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
         unsigned int width, unsigned int height, unsigned  int  border_width,
@@ -13,17 +16,42 @@ Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
 
 int (*real_XMapWindow)(Display *display, Window window);
 
-
 Window orig_window;
-int orig_window_index = 0;
+Display *XOpenDisplay(const char* display_name)
+{
+    printf("DPYprogname: %s\n", program_invocation_name);
+    if (
+            !orig_window &&
+            !strcmp(
+                program_invocation_name,
+                "/opt/World of Warcraft 3.3.5a/algalon/Wow.exe"
+                )
+       ) {
+        XInitThreads();
+        Display *dpy = real_XOpenDisplay(NULL);
 
+        XSetWindowAttributes orig_attributes;
+        orig_window = real_XCreateWindow(dpy, DefaultRootWindow(dpy), 10,
+                10, 100, 100, 0, CopyFromParent, CopyFromParent, CopyFromParent,
+                0, &orig_attributes);
+        XMapWindow(dpy, orig_window);
+        XFlush(dpy);
+    }
+    return real_XOpenDisplay(display_name);
+}
+
+int orig_window_index = 0;
 Window XCreateWindow(Display *display, Window parent, int x, int y,
         unsigned int width, unsigned int height, unsigned  int  border_width,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
         XSetWindowAttributes *attributes)
 {
     printf("progname: %s\n", program_invocation_name);
-    if (orig_window_index < 16 && parent == XDefaultRootWindow(display)) {
+    if (
+            orig_window &&
+            orig_window_index < 16 &&
+            parent == XDefaultRootWindow(display)
+       ) {
         orig_window_index++;
         if (orig_window_index == 8) {
             XChangeWindowAttributes(display, orig_window,
@@ -66,16 +94,8 @@ void __attribute__ ((constructor)) __init(void)
         fputs(dlerror(), stderr);
         exit(1);
     }
+    real_XOpenDisplay = dlsym(realX11, "XOpenDisplay");
     real_XCreateWindow = dlsym(realX11, "XCreateWindow");
     real_XMapWindow = dlsym(realX11, "XMapWindow");
 
-    XInitThreads();
-    Display *dpy = XOpenDisplay(NULL);
-
-    XSetWindowAttributes orig_attributes;
-    orig_window = real_XCreateWindow(dpy, DefaultRootWindow(dpy), 10,
-            10, 100, 100, 0, CopyFromParent, CopyFromParent, CopyFromParent,
-            0, &orig_attributes);
-    XMapWindow(dpy, orig_window);
-    XFlush(dpy);
 }
