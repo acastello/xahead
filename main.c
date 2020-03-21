@@ -16,17 +16,17 @@ Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
 
 int (*real_XMapWindow)(Display *display, Window window);
 
-Window orig_window;
 Display *XOpenDisplay(const char* display_name)
 {
     printf("DPYprogname: %s\n", program_invocation_name);
-    if (
-            !orig_window &&
-            !strcmp(
-                program_invocation_name,
-                "/opt/World of Warcraft 3.3.5a/algalon/Wow.exe"
-                )
-       ) {
+    return real_XOpenDisplay(display_name);
+}
+
+Window orig_window;
+void create_placeholder(void)
+{
+    if (!orig_window) {
+        printf("CREprogname: %s\n", program_invocation_name);
         XInitThreads();
         Display *dpy = real_XOpenDisplay(NULL);
 
@@ -34,13 +34,12 @@ Display *XOpenDisplay(const char* display_name)
         orig_window = real_XCreateWindow(dpy, DefaultRootWindow(dpy), 10,
                 10, 100, 100, 0, CopyFromParent, CopyFromParent, CopyFromParent,
                 0, &orig_attributes);
-        XMapWindow(dpy, orig_window);
+        real_XMapWindow(dpy, orig_window);
         XFlush(dpy);
     }
-    return real_XOpenDisplay(display_name);
 }
 
-int orig_window_index = 0;
+int create_window_count = 0;
 Window XCreateWindow(Display *display, Window parent, int x, int y,
         unsigned int width, unsigned int height, unsigned  int  border_width,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
@@ -48,12 +47,11 @@ Window XCreateWindow(Display *display, Window parent, int x, int y,
 {
     printf("progname: %s\n", program_invocation_name);
     if (
-            orig_window &&
-            orig_window_index < 16 &&
+            create_window_count < 8 &&
             parent == XDefaultRootWindow(display)
        ) {
-        orig_window_index++;
-        if (orig_window_index == 8) {
+        create_window_count++;
+        if (orig_window && create_window_count == 8) {
             XChangeWindowAttributes(display, orig_window,
                     valuemask, attributes);
             printf("win: 0x%lx\n", orig_window);
@@ -87,9 +85,15 @@ void (*real_wine_init)(int argc, char *argv[], char *error, int error_size);
 
 void wine_init(int argc, char *argv[], char *error, int error_size)
 {
+    FILE *log = fopen("/home/alex/log", "a+");
+    fprintf(log, "WINE_INIT %s\n", program_invocation_name);
     int i;
     for (i = 0; i < argc; i++) {
-        printf("WIN %s\n", argv[i]);
+        fprintf(log, "    %d %s\n", i, argv[i]);
+    }
+    fclose(log);
+    if (argc > 0 && strlen(argv[1]) > 0) {
+        create_placeholder();
     }
     real_wine_init(argc, argv, error, error_size);
 }
