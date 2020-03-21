@@ -4,11 +4,12 @@
 #include <unistd.h>
 #include <X11/Xlib.h>
 
-
 Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
         unsigned int width, unsigned int height, unsigned  int  border_width,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
         XSetWindowAttributes *attributes);
+
+int (*real_XMapWindow)(Display *display, Window window);
 
 
 Window orig_window;
@@ -31,9 +32,27 @@ Window XCreateWindow(Display *display, Window parent, int x, int y,
 
     Window win = real_XCreateWindow(display, parent, x, y, width, height,
             border_width, depth, class, visual, valuemask, attributes);
-    printf("win! %lu\n", win);
+    printf("win! 0x%lx\n", win);
     return win;
 }
+
+int XMapWindow(Display *display, Window window)
+{
+    int result = real_XMapWindow(display, window);
+    XWindowAttributes attrs;
+    XGetWindowAttributes(display, window, &attrs);
+
+    Window root;
+    Window parent;
+    Window *children[1024];
+    unsigned int n;
+    XQueryTree(display, window, &root, &parent, (Window **) &children, &n);
+    printf("map 0x%lx (0x%lx): %d %d\n", window, parent, attrs.override_redirect, attrs.map_state);
+
+    return result;
+}
+
+
 
 void __attribute__ ((constructor)) __init(void)
 {
@@ -44,6 +63,7 @@ void __attribute__ ((constructor)) __init(void)
         exit(1);
     }
     real_XCreateWindow = dlsym(realX11, "XCreateWindow");
+    real_XMapWindow = dlsym(realX11, "XMapWindow");
 
     XInitThreads();
     Display *dpy = XOpenDisplay(NULL);
