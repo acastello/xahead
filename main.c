@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+#include <errno.h>
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +22,7 @@ Window XCreateWindow(Display *display, Window parent, int x, int y,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
         XSetWindowAttributes *attributes)
 {
+    printf("progname: %s\n", program_invocation_name);
     if (orig_window_index < 16 && parent == XDefaultRootWindow(display)) {
         orig_window_index++;
         if (orig_window_index == 8) {
@@ -56,6 +59,7 @@ int XMapWindow(Display *display, Window window)
 
 void __attribute__ ((constructor)) __init(void)
 {
+    printf("TOPprogname: %s\n", program_invocation_name);
     void *realX11 = dlopen("libX11.so", RTLD_NOW | RTLD_GLOBAL);
     if (!realX11) {
         fputs(dlerror(), stderr);
