@@ -11,5 +11,5 @@ libxahead32.so: $(SOURCES)
 	$(CC) $(OPTS) -m32 $^ -o $@
 
 install: libxahead.so libxahead32.so
-	cp -fv libxahead.so /usr/lib/
-	cp -fv libxahead32.so /usr/lib32/libxahead.so
+	cp -f libxahead.so /usr/lib/
+	cp -f libxahead32.so /usr/lib32/libxahead.so
