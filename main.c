@@ -7,6 +7,8 @@
 #include <string.h>
 #include <X11/Xlib.h>
 
+#define WINE_SYSTEM_PREFIX "C:\\windows\\system32\\"
+
 Display *(*real_XOpenDisplay)(const char *display_name);
 
 Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
@@ -18,23 +20,25 @@ int (*real_XMapWindow)(Display *display, Window window);
 
 Display *XOpenDisplay(const char* display_name)
 {
-    printf("DPYprogname: %s\n", program_invocation_name);
+    FILE *log = fopen("/home/alex/log", "a+");
+    fprintf(log, "DISPLAY INIT %s\n", program_invocation_name);
+    fclose(log);
     return real_XOpenDisplay(display_name);
 }
 
-Window orig_window;
+Window placeholder;
 void create_placeholder(void)
 {
-    if (!orig_window) {
+    if (!placeholder) {
         printf("CREprogname: %s\n", program_invocation_name);
         XInitThreads();
         Display *dpy = real_XOpenDisplay(NULL);
 
         XSetWindowAttributes orig_attributes;
-        orig_window = real_XCreateWindow(dpy, DefaultRootWindow(dpy), 10,
+        placeholder = real_XCreateWindow(dpy, DefaultRootWindow(dpy), 10,
                 10, 100, 100, 0, CopyFromParent, CopyFromParent, CopyFromParent,
                 0, &orig_attributes);
-        real_XMapWindow(dpy, orig_window);
+        real_XMapWindow(dpy, placeholder);
         XFlush(dpy);
     }
 }
@@ -51,11 +55,11 @@ Window XCreateWindow(Display *display, Window parent, int x, int y,
             parent == XDefaultRootWindow(display)
        ) {
         create_window_count++;
-        if (orig_window && create_window_count == 8) {
-            XChangeWindowAttributes(display, orig_window,
+        if (placeholder && create_window_count == 8) {
+            XChangeWindowAttributes(display, placeholder,
                     valuemask, attributes);
-            printf("win: 0x%lx\n", orig_window);
-            return orig_window;
+            printf("win: 0x%lx\n", placeholder);
+            return placeholder;
         }
     }
 
@@ -83,23 +87,40 @@ int XMapWindow(Display *display, Window window)
 
 void (*real_wine_init)(int argc, char *argv[], char *error, int error_size);
 
+int wine_init_called = 0;
 void wine_init(int argc, char *argv[], char *error, int error_size)
 {
     FILE *log = fopen("/home/alex/log", "a+");
     fprintf(log, "WINE_INIT %s\n", program_invocation_name);
     int i;
     for (i = 0; i < argc; i++) {
-        fprintf(log, "    %d %s\n", i, argv[i]);
+        fprintf(
+                log,
+                "    %d %s %d\n",
+                i,
+                argv[i],
+                strncmp(argv[i], WINE_SYSTEM_PREFIX, sizeof(WINE_SYSTEM_PREFIX)-1)
+               );
     }
-    fclose(log);
-    if (argc > 0 && strlen(argv[1]) > 0) {
+    if (
+            argc > 0 &&
+            0 != strncmp(
+                argv[1],
+                WINE_SYSTEM_PREFIX,
+                sizeof(WINE_SYSTEM_PREFIX) - 1)
+       ) {
+        wine_init_called = 1;
         create_placeholder();
     }
+    fclose(log);
     real_wine_init(argc, argv, error, error_size);
 }
 
 void __attribute__ ((constructor)) __init(void)
 {
+    FILE *log = fopen("/home/alex/log", "a+");
+    fprintf(log, "INIT %d %s\n", getpid(), program_invocation_name);
+    fclose(log);
     printf("TOPprogname: %s\n", program_invocation_name);
     void *realX11 = dlopen("libX11.so", RTLD_NOW | RTLD_GLOBAL);
     if (!realX11) {
