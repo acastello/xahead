@@ -1,14 +1,16 @@
 all: libxahead.so libxahead32.so
 
-CC=gcc
-OPTS=-Wall -lX11 -ldl -fPIC -shared
-SOURCES=main.c
+CFLAGS = `pkg-config --cflags glib-2.0 x11` -Wall -fPIC -shared
+CFLAGS32 = `pkg-config --personality=i686-pc-linux-gnu --cflags glib-2.0 x11` -Wall -fPIC -shared
+LDLIBS = `pkg-config --libs glib-2.0 x11`
+CC = gcc
+SOURCES=main.c config.c
 
 libxahead.so: $(SOURCES)
-	$(CC) $(OPTS) $^ -o $@
+	$(CC) $(CFLAGS) $(LDLIBS) $^ -o $@
 
 libxahead32.so: $(SOURCES)
-	$(CC) $(OPTS) -m32 $^ -o $@
+	$(CC) $^ -m32 $(CFLAGS32) $(LDLIBS) -L/usr/lib32/glib-2.0/include -m32 -o $@
 
 install: libxahead.so libxahead32.so
 	cp -f libxahead.so /usr/lib/

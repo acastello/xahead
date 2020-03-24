@@ -7,17 +7,18 @@
 #include <string.h>
 #include <X11/Xlib.h>
 
+#include "xahead.h"
+
 #define WINE_SYSTEM_PREFIX "C:\\windows\\system32\\"
+
+void (*real_wine_init)(int argc, char *argv[], char *error, int error_size);
 
 Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
         unsigned int width, unsigned int height, unsigned  int  border_width,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
         XSetWindowAttributes *attributes);
 
-void (*real_wine_init)(int argc, char *argv[], char *error, int error_size);
-
 Window placeholder;
-
 void create_placeholder(void)
 {
     if (placeholder) {
@@ -32,26 +33,7 @@ void create_placeholder(void)
     XFlush(dpy);
 }
 
-Window XCreateWindow(Display *display, Window parent, int x, int y,
-        unsigned int width, unsigned int height, unsigned  int  border_width,
-        int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
-        XSetWindowAttributes *attributes)
-{
-    static int top_ignored = 8;
-    int top_window = parent == XDefaultRootWindow(display);
-    if (top_window) {
-        top_ignored--;
-    }
-
-    if (placeholder && top_window && top_ignored == 0) {
-        XChangeWindowAttributes(display, placeholder, valuemask, attributes);
-        return placeholder;
-    }
-
-    return real_XCreateWindow(display, parent, x, y, width, height,
-            border_width, depth, class, visual, valuemask, attributes);
-}
-
+int configured_index = -1;
 void wine_init(int argc, char *argv[], char *error, int error_size)
 {
     if (
@@ -62,10 +44,33 @@ void wine_init(int argc, char *argv[], char *error, int error_size)
                 sizeof(WINE_SYSTEM_PREFIX) - 1
                 )
        ) {
-        if (!placeholder)
+        configured_index = load_index(argv[1], 1);
+        if (!placeholder && configured_index >= 0)
             create_placeholder();
     }
     real_wine_init(argc, argv, error, error_size);
+}
+
+Window XCreateWindow(Display *display, Window parent, int x, int y,
+        unsigned int width, unsigned int height, unsigned  int  border_width,
+        int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
+        XSetWindowAttributes *attributes)
+{
+    static int top_windows_created = 0;
+    if (
+            top_windows_created < configured_index &&
+            parent == XDefaultRootWindow(display)
+       ){
+        top_windows_created++;
+
+        if (placeholder && top_windows_created == configured_index) {
+            XChangeWindowAttributes(display, placeholder, valuemask, attributes);
+            return placeholder;
+        }
+    }
+
+    return real_XCreateWindow(display, parent, x, y, width, height,
+            border_width, depth, class, visual, valuemask, attributes);
 }
 
 #define DLCHECKERROR(var) \
