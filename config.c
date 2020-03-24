@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <sys/file.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "xahead.h"
 
@@ -50,20 +51,19 @@ int load_index(char *progname, int is_wine)
             );
 }
 
+#define ERROR perror("ERRO save_index"); return;
 void save_index(char *progname, int is_wine, int index)
 {
     g_autoptr(GError) error = NULL;
     g_autoptr(GKeyFile) key_file = g_key_file_new();
 
     int fd;
-    if (!(fd = open(key_file_name, 0))) {
-        perror("save_index");
-        return;
+    if (0 >= (fd = open(key_file_name, 0))) {
+        ERROR;
     }
 
-    if (!flock(fd, LOCK_SH)) {
-        perror("save_index");
-        return;
+    if (flock(fd, LOCK_SH)) {
+        ERROR;
     }
 
     if (
@@ -93,13 +93,12 @@ void save_index(char *progname, int is_wine, int index)
         fprintf(stderr, "Cannot write key file \"%s\": %s\n", key_file_name, error->message);
     }
 
-    if (!flock(fd, LOCK_UN)) {
-        perror("save_index");
-        return;
+    if (flock(fd, LOCK_UN)) {
+        ERROR;
     }
 
-    if (!close(fd)) {
-        perror("save_index");
+    if (close(fd)) {
+        ERROR;
     }
 }
 
