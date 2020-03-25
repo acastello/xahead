@@ -1,2 +1,7 @@
 *.swp
 *~
+*.so
+testexe
+*.gcda
+*.gcno
+*.gcov
