@@ -11,15 +11,15 @@
 
 #define WINE_SYSTEM_PREFIX "C:\\windows\\system32\\"
 
-void (*real_wine_init)(int argc, char *argv[], char *error, int error_size);
+static void (*real_wine_init)(int argc, char *argv[], char *error, int error_size);
 
-Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
+static Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
         unsigned int width, unsigned int height, unsigned  int  border_width,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
         XSetWindowAttributes *attributes);
 
-Window placeholder;
-void create_placeholder(void)
+static Window placeholder;
+static void create_placeholder(void)
 {
     if (placeholder) {
         fputs("!! Trying to recreate placeholder window", stderr);
@@ -51,15 +51,16 @@ void wine_init(int argc, char *argv[], char *error, int error_size)
     real_wine_init(argc, argv, error, error_size);
 }
 
+static int top_windows_created = 0;
 Window XCreateWindow(Display *display, Window parent, int x, int y,
         unsigned int width, unsigned int height, unsigned  int  border_width,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
         XSetWindowAttributes *attributes)
 {
-    static int top_windows_created = 0;
     if (
-            top_windows_created < configured_index &&
-            parent == XDefaultRootWindow(display)
+            configured_index > 0 ||
+            (top_windows_created < configured_index &&
+             parent == XDefaultRootWindow(display))
        ){
         top_windows_created++;
 
