@@ -1,3 +1,5 @@
+/** \file */
+
 #define _GNU_SOURCE
 #include <errno.h>
 #include <dlfcn.h>
@@ -9,19 +11,46 @@
 
 #include "xahead.h"
 
+#ifndef MAX_TOP_WINDOWS
+/**
+ * Probably won't be surpassed before a regular, viewable window is mapped
+ */
 #define MAX_TOP_WINDOWS 32
+#endif
 #define WINE_SYSTEM_PREFIX "C:\\windows\\system32\\"
 
+/**
+ * To be dlsym-initialized with the actual `wine_init` if necessary
+ */
 static void (*real_wine_init)(int argc, char *argv[], char *error, int error_size);
 
+/**
+ * To be dlsym-initialized with the actual XCreateWindow
+ */
 static Window (*real_XCreateWindow)(Display *display, Window parent, int x, int y,
         unsigned int width, unsigned int height, unsigned  int  border_width,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
         XSetWindowAttributes *attributes);
 
+/**
+ * To be dlsym-initialized with the actual XMapWindow
+ */
 static int (*real_XMapWindow)(Display *display, Window w);
 
+/**
+ * Created and mapped as soon as possible in index-configured programs. To be
+ * returned on the creation of configured, first visible regular window
+ * \note _visible_ as in successfully and deliberately mapped: is passed to a
+ * successful XMapWindow call
+ * \note _regular_ as in managed (no `override_redirect`) and mapped to the root
+ * window
+ */
 static Window placeholder;
+
+/**
+ * Create and map a single global placeholder window, used only in execution
+ * mode (index is configured for progname)
+ */
 static void create_placeholder(void)
 {
     if (placeholder) {
@@ -36,8 +65,20 @@ static void create_placeholder(void)
     XFlush(dpy);
 }
 
-int configured_index = -1;
-char *progname;
+/**
+ * Set by *_init, specifies index of window to be spawned, or 0 if none is
+ * configured
+ */
+static int configured_index = -1;
+/**
+ * Set by *_init, specifies program name for saving the new index
+ */
+static char *progname;
+
+/**
+ * Overload wine_init to provide additional initialization and loading
+ * configuration
+ */
 void wine_init(int argc, char *argv[], char *error, int error_size)
 {
     if (
@@ -56,13 +97,21 @@ void wine_init(int argc, char *argv[], char *error, int error_size)
     real_wine_init(argc, argv, error, error_size);
 }
 
-static int top_windows_created = 0;
+/**
+ * To be updated when spawning windows if no index is configured yet. Windows
+ * are added in order of appearance
+ */
 static Window top_windows[MAX_TOP_WINDOWS + 1];
+/**
+ * Overload XCreateWindow to keep track of created windows in configure mode or
+ * return the placeholder in execution mode
+ */
 Window XCreateWindow(Display *display, Window parent, int x, int y,
         unsigned int width, unsigned int height, unsigned  int  border_width,
         int depth, unsigned int class,  Visual *visual, unsigned long valuemask,
         XSetWindowAttributes *attributes)
 {
+    static int top_windows_created = 0;
     int is_top_normal =
         parent == XDefaultRootWindow(display) &&
         (!attributes || !attributes->override_redirect);
@@ -89,6 +138,10 @@ Window XCreateWindow(Display *display, Window parent, int x, int y,
     return w;
 }
 
+/**
+ * Overload XMapWindow to detect the first regular visible window in configure
+ * mode
+ */
 int XMapWindow(Display *display, Window w)
 {
     int visible = real_XMapWindow(display, w);
@@ -103,6 +156,9 @@ int XMapWindow(Display *display, Window w)
     return visible;
 }
 
+/**
+ * Convenience macro to automatically exit on failure to load symbols
+ */
 #define DLCHECKERROR(var) \
     do {                               \
         if (!var) {                    \
@@ -112,6 +168,9 @@ int XMapWindow(Display *display, Window w)
         }                              \
     } while (0);
 
+/**
+ * Early init to detect program name
+ */
 void __attribute__ ((constructor)) __init(void)
 {
     void *real_X11 = dlopen("libX11.so", RTLD_NOW | RTLD_GLOBAL);

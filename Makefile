@@ -28,8 +28,13 @@ config.c.gcov: config.gcda
 coverage: config.c.gcov
 	cat $^
 
+html/index.html: $(SOURCES) Doxyfile
+	doxygen
+
+doc: html/index.html
+
 clean:
-	rm -fv *.{gcda,gcno,gcov,so} testexe
+	rm -rfv *.{gcda,gcno,gcov,so} testexe html
 
 install: libxahead.so libxahead32.so
 	cp -f libxahead.so /usr/lib/

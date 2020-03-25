@@ -5,3 +5,4 @@ testexe
 *.gcda
 *.gcno
 *.gcov
+html/
