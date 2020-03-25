@@ -14,7 +14,10 @@ gchar *key_file_name = "/home/alex/.config/xahead";
 
 void configure_key_file_name(char *filename)
 {
-    key_file_name = filename;
+    if (filename) {
+        key_file_name = filename;
+    }
+    // TODO: make envvar-set, multidir-searching configuration
 }
 
 int load_index(char *progname, int is_wine)
@@ -31,16 +34,15 @@ int load_index(char *progname, int is_wine)
 
     if (!success) {
         if (error->code == G_FILE_ERROR_NOENT) {
-            g_clear_error(&error);
-            // TODO: use CONF_CREATE
-            return CONF_NO_EXEC;
+            g_info("%s\n", error->message);
+            return CONF_NO_INDEX;
         }
         if (error->domain == G_KEY_FILE_ERROR) {
-            // TODO: warn
-            g_clear_error(&error);
-            return CONF_NO_EXEC;
+            g_info("%s\n", error->message);
+            return CONF_NO_INDEX;
         }
-        return CONF_NO_EXEC;
+        g_warning("unhandled error: %s\n", error->message);
+        return CONF_NO_INDEX;
     }
 
     return g_key_file_get_integer(
@@ -51,19 +53,19 @@ int load_index(char *progname, int is_wine)
             );
 }
 
-#define ERROR perror("ERRO save_index"); return;
+#define WARN g_warning("%s:%d %s: %s\n", __FILE__, __LINE__, __func__, strerror(errno)); return;
 void save_index(char *progname, int is_wine, int index)
 {
     g_autoptr(GError) error = NULL;
     g_autoptr(GKeyFile) key_file = g_key_file_new();
 
     int fd;
-    if (0 >= (fd = open(key_file_name, 0))) {
-        ERROR;
+    if (0 >= (fd = open(key_file_name, O_CREAT | O_RDONLY, S_IRUSR))) {
+        WARN;
     }
 
     if (flock(fd, LOCK_SH)) {
-        ERROR;
+        WARN;
     }
 
     if (
@@ -74,7 +76,7 @@ void save_index(char *progname, int is_wine, int index)
                 &error
                 )
        ) {
-        fprintf(stderr, "Cannot read key file \"%s\": %s\n", key_file_name, error->message);
+        g_warning("failed to read key file \"%s\": %s", key_file_name, error->message);
         return;
     }
     g_key_file_set_integer(
@@ -90,15 +92,15 @@ void save_index(char *progname, int is_wine, int index)
                 &error
                 )
        ) {
-        fprintf(stderr, "Cannot write key file \"%s\": %s\n", key_file_name, error->message);
+        g_warning("failed to write key file \"%s\": %s", key_file_name, error->message);
     }
 
     if (flock(fd, LOCK_UN)) {
-        ERROR;
+        WARN;
     }
 
     if (close(fd)) {
-        ERROR;
+        WARN;
     }
 }
 
